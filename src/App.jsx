@@ -37,6 +37,7 @@ export default function App() {
           onInstructionTextChange={handleInstructionTextChange}
           onParseInstructions={handleParseInstructions}
           onPdfUpload={handlePdfUpload}
+          onManualSearch={handleInstructionTextChange}
         />
 
         <VideoStage

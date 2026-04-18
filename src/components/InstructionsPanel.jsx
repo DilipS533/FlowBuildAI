@@ -1,3 +1,5 @@
+import { ManualSearch } from "./ManualSearch";
+
 export function InstructionsPanel({
   demoMode,
   inputFeedback,
@@ -10,7 +12,18 @@ export function InstructionsPanel({
   onInstructionTextChange,
   onParseInstructions,
   onPdfUpload,
+  onManualSearch,
 }) {
+  const handleManualFound = (text, manualData) => {
+    if (onManualSearch) {
+      onManualSearch(text, manualData);
+    }
+    // Auto-trigger parsing with the manual instructions
+    setTimeout(() => {
+      onParseInstructions();
+    }, 100);
+  };
+
   return (
     <section className="panel left-panel">
       <article className="card input-card">
@@ -19,6 +32,12 @@ export function InstructionsPanel({
             <p className="eyebrow">Instruction Input</p>
             <h2>Load a guide</h2>
           </div>
+        </div>
+
+        <ManualSearch onManualFound={handleManualFound} isLoading={false} />
+
+        <div className="or-divider">
+          <span>or upload file</span>
         </div>
 
         <label className="upload-field" htmlFor="pdfUpload">
