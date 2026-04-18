@@ -1,66 +1,80 @@
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>FlowStep AI</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;700&display=swap"
-      rel="stylesheet"
-    />
-    <script
-      src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"
-      defer
-    ></script>
-    <script
-      src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"
-      defer
-    ></script>
-    <script type="module" crossorigin src="/FlowBuildAI/assets/index-gETRw3wE.js"></script>
-    <link rel="modulepreload" crossorigin href="/FlowBuildAI/assets/preload-helper-D66Wbpj2.js">
-    <link rel="stylesheet" crossorigin href="/FlowBuildAI/assets/index-D1NmabP-.css">
-  </head>
-  <body>
-    <!-- Fallback content: will be replaced by the React app. If you see this message,
-         the client bundle failed to load or execute. -->
-    <div id="root">
-      <div style="font-family: Arial, Helvetica, sans-serif; padding: 28px; text-align: center;">
-        <h2>FlowStep AI</h2>
-        <p style="color: #b35a14;">Loading application... If this message remains visible, JavaScript failed to load or executed with errors.</p>
-        <p style="font-size:0.9rem;color:#5f746b">Open the browser console (F12) to see runtime errors.</p>
-      </div>
-    </div>
-    <!-- Global error catcher: displays runtime errors in-page so deployed failures aren't a blank screen -->
     <script>
       (function(){
-        function showError(msg){
+        function safeStringify(obj) {
+          try {
+            if (typeof obj === 'string') return obj;
+            if (obj instanceof Error) return obj.message + '\n' + (obj.stack || '');
+            return JSON.stringify(obj, Object.getOwnPropertyNames(obj)) || String(obj);
+          } catch (e) {
+            return String(obj);
+          }
+        }
+
+        function showError(info){
           try{
             var root = document.getElementById('root');
             if(!root) return;
+            var text = '';
+            if (info && typeof info === 'object') {
+              text = '';
+              if (info.message) text += info.message + '\n';
+              if (info.filename) text += 'File: ' + info.filename + '\n';
+              if (info.lineno || info.colno) text += 'Location: ' + (info.lineno||'') + ':' + (info.colno||'') + '\n';
+              if (info.error) text += safeStringify(info.error) + '\n';
+              if (!text.trim()) text = safeStringify(info);
+            } else {
+              text = safeStringify(info);
+            }
+
             root.innerHTML = '<div style="padding:28px;text-align:center;font-family:Arial,Helvetica,sans-serif;color:#b35a14;background:#fff7f2;border:1px solid #f0c9b0;border-radius:12px;">'
               + '<h2>Application error</h2>'
               + '<pre style="white-space:pre-wrap; text-align:left; max-width:760px; margin:0 auto; color:#6b2f00;">'+
-                String(msg).replace(/</g,'&lt;')+
+                String(text).replace(/</g,'&lt;')+
               '</pre>'
               + '<p style="color:#5f746b;">Open the browser console (F12) for full diagnostics.</p></div>';
+            // Also log to console to help remote diagnostics
+            console.error('In-page error catcher:', info);
           }catch(e){/* ignore */}
         }
-        window.addEventListener('error', function(e){ showError(e.message || e.error || e); }, true);
-        window.addEventListener('unhandledrejection', function(e){ showError(e.reason || e); }, true);
+
+        window.addEventListener('error', function(evt){
+          // evt may be an ErrorEvent
+          try {
+            const payload = {
+              message: evt.message || 'Error',
+              filename: evt.filename || (evt.target && evt.target.src) || null,
+              lineno: evt.lineno || null,
+              colno: evt.colno || null,
+              error: evt.error || null,
+              type: evt.type || 'error'
+            };
+            showError(payload);
+          } catch (e) {
+            showError(evt);
+          }
+        }, true);
+
+        window.addEventListener('unhandledrejection', function(evt){
+          try {
+            const reason = evt.reason;
+            const payload = {
+              message: 'Unhandled promise rejection',
+              reason: reason,
+              type: 'unhandledrejection'
+            };
+            showError(payload);
+          } catch (e) {
+            showError(evt);
+          }
+        }, true);
+
         // small heartbeat to show the app hasn't initialized after 6s
         setTimeout(function(){
-          if(document.getElementById('root') && document.getElementById('root').children.length === 0){
-            showError('App did not initialize within expected time.');
-          }
+          try{
+            if(document.getElementById('root') && document.getElementById('root').children.length === 0){
+              showError({ message: 'App did not initialize within expected time.' });
+            }
+          } catch(e) {}
         }, 6000);
       })();
-    </script>
-    <noscript>
-      <div style="padding:28px; text-align:center; color:#b35a14; font-family:Arial, Helvetica, sans-serif;">
-        JavaScript is disabled in your browser. FlowStep AI requires JavaScript to run.
-      </div>
-    </noscript>
-  </body>
-</html>
+    </script>
