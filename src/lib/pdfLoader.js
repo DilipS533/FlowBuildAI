@@ -28,35 +28,17 @@ export async function extractTextFromPdf(file) {
 
     content.items.forEach((item) => {
       const nextY = item.transform[5];
-      const text = item.str.trim();
-
-      // Skip purely numeric or whitespace-only items
-      if (!text || /^\d+$/.test(text)) {
-        return;
-      }
 
       if (lastY !== null && Math.abs(nextY - lastY) > 3) {
         pageText += "\n";
       }
 
-      pageText += `${text} `;
+      pageText += `${item.str} `;
       lastY = nextY;
     });
 
     pages.push(pageText.trim());
   }
 
-  // Clean up the extracted text
-  let cleanText = pages.join("\n");
-  
-  // Remove excessive whitespace
-  cleanText = cleanText.replace(/\s+/g, " ");
-  
-  // Fix spacing around punctuation
-  cleanText = cleanText.replace(/\s+([.!?,;:])/g, "$1");
-  
-  // Restore line breaks for readability
-  cleanText = cleanText.replace(/([.!?])\s+(?=[A-Z])/g, "$1\n");
-  
-  return cleanText.trim();
+  return pages.join("\n");
 }
