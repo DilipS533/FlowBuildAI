@@ -20,7 +20,45 @@
     ></script>
   </head>
   <body>
-    <div id="root"></div>
+    <!-- Fallback content: will be replaced by the React app. If you see this message,
+         the client bundle failed to load or execute. -->
+    <div id="root">
+      <div style="font-family: Arial, Helvetica, sans-serif; padding: 28px; text-align: center;">
+        <h2>FlowStep AI</h2>
+        <p style="color: #b35a14;">Loading application... If this message remains visible, JavaScript failed to load or executed with errors.</p>
+        <p style="font-size:0.9rem;color:#5f746b">Open the browser console (F12) to see runtime errors.</p>
+      </div>
+    </div>
+    <!-- Global error catcher: displays runtime errors in-page so deployed failures aren't a blank screen -->
+    <script>
+      (function(){
+        function showError(msg){
+          try{
+            var root = document.getElementById('root');
+            if(!root) return;
+            root.innerHTML = '<div style="padding:28px;text-align:center;font-family:Arial,Helvetica,sans-serif;color:#b35a14;background:#fff7f2;border:1px solid #f0c9b0;border-radius:12px;">'
+              + '<h2>Application error</h2>'
+              + '<pre style="white-space:pre-wrap; text-align:left; max-width:760px; margin:0 auto; color:#6b2f00;">'+
+                String(msg).replace(/</g,'&lt;')+
+              '</pre>'
+              + '<p style="color:#5f746b;">Open the browser console (F12) for full diagnostics.</p></div>';
+          }catch(e){/* ignore */}
+        }
+        window.addEventListener('error', function(e){ showError(e.message || e.error || e); }, true);
+        window.addEventListener('unhandledrejection', function(e){ showError(e.reason || e); }, true);
+        // small heartbeat to show the app hasn't initialized after 6s
+        setTimeout(function(){
+          if(document.getElementById('root') && document.getElementById('root').children.length === 0){
+            showError('App did not initialize within expected time.');
+          }
+        }, 6000);
+      })();
+    </script>
     <script type="module" src="/src/main.jsx"></script>
+    <noscript>
+      <div style="padding:28px; text-align:center; color:#b35a14; font-family:Arial, Helvetica, sans-serif;">
+        JavaScript is disabled in your browser. FlowStep AI requires JavaScript to run.
+      </div>
+    </noscript>
   </body>
 </html>
