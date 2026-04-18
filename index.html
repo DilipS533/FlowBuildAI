@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FlowStep AI</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+    <script
+      src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"
+      defer
+    ></script>
+    <script
+      src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"
+      defer
+    ></script>
+    <script
+      src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"
+      defer
+    ></script>
+    <script type="module" src="app.js"></script>
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">FlowStep AI</p>
+          <h1>Live task guidance with in-browser verification</h1>
+        </div>
+        <label class="demo-toggle" for="demoMode">
+          <span>Demo Mode</span>
+          <input id="demoMode" type="checkbox" />
+          <span class="toggle-visual" aria-hidden="true"></span>
+        </label>
+      </header>
+
+      <main class="workspace">
+        <section class="panel left-panel">
+          <article class="card input-card">
+            <div class="card-heading">
+              <div>
+                <p class="eyebrow">Instruction Input</p>
+                <h2>Load a guide</h2>
+              </div>
+            </div>
+
+            <label class="upload-field" for="pdfUpload">
+              <span>Upload PDF</span>
+              <input id="pdfUpload" type="file" accept="application/pdf" />
+            </label>
+
+            <div class="or-divider">
+              <span>or paste text</span>
+            </div>
+
+            <label class="text-input-group" for="instructionInput">
+              <span>Instructions</span>
+              <textarea
+                id="instructionInput"
+                placeholder="1. Place the first piece in the center&#10;2. Add the next piece on top&#10;3. Press the final part into place"
+              ></textarea>
+            </label>
+
+            <button id="parseButton" class="primary-button" type="button">
+              Build Steps
+            </button>
+            <p id="inputFeedback" class="support-text">
+              FlowStep AI accepts numbered lists, bullets, or plain sentences.
+            </p>
+          </article>
+
+          <article class="card step-card">
+            <div class="card-heading">
+              <div>
+                <p class="eyebrow">Current Step</p>
+                <h2 id="stepCounter">Step 0 / 0</h2>
+              </div>
+              <span id="demoBadge" class="mode-badge hidden">Demo mode</span>
+            </div>
+
+            <p id="currentStepText" class="current-step-copy">
+              Upload instructions to generate the live step flow.
+            </p>
+
+            <ol id="stepList" class="step-list"></ol>
+          </article>
+        </section>
+
+        <section class="panel center-panel">
+          <article class="card stage-card">
+            <div class="card-heading">
+              <div>
+                <p class="eyebrow">Workspace Feed</p>
+                <h2>Realtime verification</h2>
+              </div>
+              <div class="stage-actions">
+                <button id="startCameraButton" class="primary-button" type="button">
+                  Start Camera
+                </button>
+                <button id="stopSessionButton" class="secondary-button" type="button">
+                  Stop
+                </button>
+              </div>
+            </div>
+
+            <div class="video-shell">
+              <video id="webcamVideo" autoplay playsinline muted></video>
+              <canvas id="handOverlay" aria-hidden="true"></canvas>
+              <canvas id="captureCanvas" class="hidden-canvas" aria-hidden="true"></canvas>
+              <div id="videoPlaceholder" class="video-placeholder">
+                <p>Camera inactive</p>
+                <span>Start the feed to enable motion and hand analysis.</span>
+              </div>
+            </div>
+
+            <div class="stage-footer">
+              <div class="metric-card">
+                <span>Motion</span>
+                <strong id="motionValue">0.0%</strong>
+              </div>
+              <div class="metric-card">
+                <span>Hands</span>
+                <strong id="handValue">0</strong>
+              </div>
+              <div class="metric-card">
+                <span>Corrections</span>
+                <strong id="correctionValue">0</strong>
+              </div>
+              <div class="metric-card">
+                <span>Elapsed</span>
+                <strong id="elapsedValue">00:00</strong>
+              </div>
+            </div>
+          </article>
+
+          <article id="completionCard" class="card completion-card hidden">
+            <p class="eyebrow">Session Complete</p>
+            <h2>All steps completed successfully.</h2>
+            <p id="completionSummary" class="support-text"></p>
+          </article>
+        </section>
+
+        <aside class="panel right-panel">
+          <article class="card status-card">
+            <p class="eyebrow">System Status</p>
+            <div id="statusPill" class="status-pill idle">Waiting for setup</div>
+            <p id="statusDetail" class="status-detail">
+              Load instructions and start the camera to begin the live flow.
+            </p>
+
+            <div class="status-grid">
+              <div class="status-grid-item">
+                <span>Engine</span>
+                <strong id="engineState">Idle</strong>
+              </div>
+              <div class="status-grid-item">
+                <span>Session</span>
+                <strong id="sessionState">Not started</strong>
+              </div>
+              <div class="status-grid-item">
+                <span>Hand Check</span>
+                <strong id="handState">Searching</strong>
+              </div>
+              <div class="status-grid-item">
+                <span>Guidance</span>
+                <strong id="guidanceState">Ready</strong>
+              </div>
+            </div>
+          </article>
+
+          <article class="card timeline-card">
+            <div class="card-heading">
+              <div>
+                <p class="eyebrow">Live Feed</p>
+                <h2>Event stream</h2>
+              </div>
+            </div>
+            <ul id="eventLog" class="event-log"></ul>
+          </article>
+
+          <article class="card hint-card">
+            <p class="eyebrow">Verification Model</p>
+            <p class="support-text">
+              Step completion uses motion onset, hand presence, and post-action
+              stabilization. Demo Mode lowers the motion threshold and accepts
+              shorter actions.
+            </p>
+          </article>
+        </aside>
+      </main>
+    </div>
+  </body>
+</html>
