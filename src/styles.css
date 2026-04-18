@@ -1,6 +1,5 @@
 :root {
   --bg: #f4efe3;
-  --bg-secondary: #eadfcb;
   --ink: #15211d;
   --ink-soft: #3c4f49;
   --card: rgba(255, 250, 242, 0.82);
@@ -18,7 +17,8 @@
 }
 
 html,
-body {
+body,
+#root {
   margin: 0;
   min-height: 100%;
 }
@@ -115,6 +115,10 @@ textarea {
   margin: 0;
   color: var(--ink-soft);
   line-height: 1.55;
+}
+
+.warning-text {
+  color: var(--warning);
 }
 
 .demo-toggle {
@@ -298,8 +302,8 @@ textarea {
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-#webcamVideo,
-#handOverlay {
+.video-shell video,
+.video-shell canvas {
   position: absolute;
   inset: 0;
   width: 100%;
@@ -308,11 +312,15 @@ textarea {
   transform: scaleX(-1);
 }
 
-#webcamVideo {
+.video-shell video {
   display: none;
 }
 
-#handOverlay {
+.video-shell video.camera-live {
+  display: block;
+}
+
+.video-shell canvas {
   pointer-events: none;
 }
 
@@ -336,7 +344,7 @@ textarea {
 }
 
 .hidden-canvas {
-  display: none;
+  display: none !important;
 }
 
 .stage-footer {
