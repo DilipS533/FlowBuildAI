@@ -67,6 +67,17 @@ const DEMO_CONFIG = {
   handsMinTrackingConfidence: 0.4,
 };
 
+const PALM_INDICES = [0, 5, 9, 13, 17];
+const TRACKED_POINTS = [
+  { index: 0, label: "Wrist", color: "#7dd3fc", radius: 8 },
+  { index: 4, label: "Thumb", color: "#ff9f67", radius: 7 },
+  { index: 8, label: "Index", color: "#ffd166", radius: 10 },
+  { index: 12, label: "Middle", color: "#8ce99a", radius: 8 },
+  { index: 16, label: "Ring", color: "#c792ea", radius: 7 },
+  { index: 20, label: "Pinky", color: "#5eead4", radius: 7 },
+];
+const TRAIL_LIMIT = 14;
+
 const state = {
   steps: [],
   completedSteps: new Set(),
@@ -91,6 +102,7 @@ const state = {
   lastStepAnnouncementIndex: -1,
   handCount: 0,
   handLastSeenAt: 0,
+  handTrails: [],
   demoMode: false,
   logEntries: [],
   speechQueue: [],
@@ -272,6 +284,7 @@ function resetStepRuntime() {
   state.lastPromptAt = 0;
   state.lastCorrectionAt = 0;
   state.lastStepAnnouncementIndex = -1;
+  state.handTrails = [];
   state.speechQueue = [];
   state.speaking = false;
 
@@ -778,6 +791,188 @@ function clearOverlay() {
   overlayContext.clearRect(0, 0, elements.handOverlay.width, elements.handOverlay.height);
 }
 
+function getCanvasPoint(landmark) {
+  return {
+    x: landmark.x * elements.handOverlay.width,
+    y: landmark.y * elements.handOverlay.height,
+  };
+}
+
+function getPalmCenter(landmarks) {
+  const total = PALM_INDICES.reduce(
+    (accumulator, index) => {
+      const point = getCanvasPoint(landmarks[index]);
+      accumulator.x += point.x;
+      accumulator.y += point.y;
+      return accumulator;
+    },
+    { x: 0, y: 0 }
+  );
+
+  return {
+    x: total.x / PALM_INDICES.length,
+    y: total.y / PALM_INDICES.length,
+  };
+}
+
+function updateHandTrail(handIndex, point) {
+  if (!state.handTrails[handIndex]) {
+    state.handTrails[handIndex] = [];
+  }
+
+  const trail = state.handTrails[handIndex];
+  trail.push(point);
+
+  if (trail.length > TRAIL_LIMIT) {
+    trail.splice(0, trail.length - TRAIL_LIMIT);
+  }
+}
+
+function drawTrail(points, rgbColor) {
+  if (!overlayContext || points.length < 2) {
+    return;
+  }
+
+  overlayContext.save();
+  overlayContext.lineCap = "round";
+  overlayContext.lineJoin = "round";
+
+  for (let index = 1; index < points.length; index += 1) {
+    const start = points[index - 1];
+    const end = points[index];
+    const alpha = index / points.length;
+
+    overlayContext.beginPath();
+    overlayContext.strokeStyle = `rgba(${rgbColor}, ${(alpha * 0.72).toFixed(2)})`;
+    overlayContext.lineWidth = 2 + alpha * 4;
+    overlayContext.moveTo(start.x, start.y);
+    overlayContext.lineTo(end.x, end.y);
+    overlayContext.stroke();
+  }
+
+  overlayContext.restore();
+}
+
+function drawTrackingPoint(point, color, radius) {
+  if (!overlayContext) {
+    return;
+  }
+
+  const pulse = 0.72 + Math.sin(Date.now() / 180) * 0.14;
+
+  overlayContext.save();
+  overlayContext.shadowBlur = 22;
+  overlayContext.shadowColor = color;
+  overlayContext.fillStyle = color;
+  overlayContext.globalAlpha = 0.18;
+  overlayContext.beginPath();
+  overlayContext.arc(point.x, point.y, radius * 1.9 * pulse, 0, Math.PI * 2);
+  overlayContext.fill();
+
+  overlayContext.globalAlpha = 0.92;
+  overlayContext.lineWidth = 2;
+  overlayContext.strokeStyle = "rgba(255, 247, 239, 0.95)";
+  overlayContext.beginPath();
+  overlayContext.arc(point.x, point.y, radius, 0, Math.PI * 2);
+  overlayContext.stroke();
+
+  overlayContext.fillStyle = color;
+  overlayContext.beginPath();
+  overlayContext.arc(point.x, point.y, radius * 0.58, 0, Math.PI * 2);
+  overlayContext.fill();
+  overlayContext.restore();
+}
+
+function drawMirroredText(text, x, y, color) {
+  if (!overlayContext) {
+    return;
+  }
+
+  overlayContext.save();
+  overlayContext.translate(x, y);
+  overlayContext.scale(-1, 1);
+  overlayContext.font = '600 14px "IBM Plex Mono", monospace';
+  overlayContext.textAlign = "center";
+  overlayContext.textBaseline = "middle";
+  overlayContext.fillStyle = color;
+  overlayContext.fillText(text, 0, 0);
+  overlayContext.restore();
+}
+
+function traceRoundedRect(x, y, width, height, radius) {
+  const safeRadius = Math.min(radius, width / 2, height / 2);
+
+  overlayContext.beginPath();
+  overlayContext.moveTo(x + safeRadius, y);
+  overlayContext.lineTo(x + width - safeRadius, y);
+  overlayContext.quadraticCurveTo(x + width, y, x + width, y + safeRadius);
+  overlayContext.lineTo(x + width, y + height - safeRadius);
+  overlayContext.quadraticCurveTo(x + width, y + height, x + width - safeRadius, y + height);
+  overlayContext.lineTo(x + safeRadius, y + height);
+  overlayContext.quadraticCurveTo(x, y + height, x, y + height - safeRadius);
+  overlayContext.lineTo(x, y + safeRadius);
+  overlayContext.quadraticCurveTo(x, y, x + safeRadius, y);
+  overlayContext.closePath();
+}
+
+function drawHandBadge(label, anchor, color) {
+  if (!overlayContext) {
+    return;
+  }
+
+  const badgeWidth = Math.max(92, label.length * 8 + 28);
+  const badgeHeight = 28;
+  const badgeX = anchor.x - badgeWidth / 2;
+  const badgeY = Math.max(16, anchor.y - 52);
+
+  overlayContext.save();
+  overlayContext.fillStyle = "rgba(21, 33, 29, 0.68)";
+  overlayContext.strokeStyle = color;
+  overlayContext.lineWidth = 1.5;
+  traceRoundedRect(badgeX, badgeY, badgeWidth, badgeHeight, 14);
+  overlayContext.fill();
+  overlayContext.stroke();
+  overlayContext.restore();
+
+  drawMirroredText(label, anchor.x, badgeY + badgeHeight / 2, "#fff7ef");
+}
+
+function drawPinchLink(thumbPoint, indexPoint) {
+  if (!overlayContext) {
+    return;
+  }
+
+  overlayContext.save();
+  overlayContext.strokeStyle = "rgba(255, 209, 102, 0.78)";
+  overlayContext.lineWidth = 2.5;
+  overlayContext.setLineDash([8, 6]);
+  overlayContext.beginPath();
+  overlayContext.moveTo(thumbPoint.x, thumbPoint.y);
+  overlayContext.lineTo(indexPoint.x, indexPoint.y);
+  overlayContext.stroke();
+  overlayContext.restore();
+}
+
+function drawTrackingGuide() {
+  if (!overlayContext || !elements.handOverlay.width || !elements.handOverlay.height) {
+    return;
+  }
+
+  const width = elements.handOverlay.width;
+  const height = elements.handOverlay.height;
+  const guideWidth = width * 0.42;
+  const guideHeight = height * 0.34;
+  const guideX = (width - guideWidth) / 2;
+  const guideY = (height - guideHeight) / 2;
+
+  overlayContext.save();
+  overlayContext.strokeStyle = "rgba(255, 247, 239, 0.18)";
+  overlayContext.lineWidth = 1.5;
+  overlayContext.setLineDash([10, 10]);
+  overlayContext.strokeRect(guideX, guideY, guideWidth, guideHeight);
+  overlayContext.restore();
+}
+
 function resizeVisualCanvases() {
   const width = elements.webcamVideo.videoWidth;
   const height = elements.webcamVideo.videoHeight;
@@ -795,31 +990,59 @@ function resizeVisualCanvases() {
 function handleHandResults(results) {
   resizeVisualCanvases();
   clearOverlay();
+  drawTrackingGuide();
 
   const landmarks = results.multiHandLandmarks ?? [];
+  const handedness = results.multiHandedness ?? [];
   state.handCount = landmarks.length;
   setText(elements.handValue, String(state.handCount));
+  state.handTrails.length = landmarks.length;
 
   if (landmarks.length) {
     state.handLastSeenAt = Date.now();
   }
 
-  if (!landmarks.length || !window.drawConnectors || !window.drawLandmarks || !window.HAND_CONNECTIONS) {
+  if (!landmarks.length) {
     return;
   }
 
-  landmarks.forEach((handLandmarks) => {
-    window.drawConnectors(overlayContext, handLandmarks, window.HAND_CONNECTIONS, {
-      color: "#ea6a2a",
-      lineWidth: 3,
+  landmarks.forEach((handLandmarks, handIndex) => {
+    const label = handedness[handIndex]?.label ?? `Hand ${handIndex + 1}`;
+    const palmCenter = getPalmCenter(handLandmarks);
+    const thumbPoint = getCanvasPoint(handLandmarks[4]);
+    const indexPoint = getCanvasPoint(handLandmarks[8]);
+
+    updateHandTrail(handIndex, indexPoint);
+    drawTrail(state.handTrails[handIndex] ?? [], "255, 209, 102");
+
+    if (window.drawConnectors && window.HAND_CONNECTIONS) {
+      window.drawConnectors(overlayContext, handLandmarks, window.HAND_CONNECTIONS, {
+        color: "rgba(234, 106, 42, 0.72)",
+        lineWidth: 3,
+      });
+    }
+
+    if (window.drawLandmarks) {
+      window.drawLandmarks(overlayContext, handLandmarks, {
+        color: "rgba(255, 247, 239, 0.7)",
+        fillColor: "rgba(34, 121, 93, 0.55)",
+        radius: 3,
+        lineWidth: 1,
+      });
+    }
+
+    TRACKED_POINTS.forEach(({ index, label: pointLabel, color, radius }) => {
+      const point = getCanvasPoint(handLandmarks[index]);
+      drawTrackingPoint(point, color, radius);
+
+      if (index === 0 || index === 8) {
+        drawMirroredText(pointLabel, point.x, Math.max(18, point.y - 18), "#fff7ef");
+      }
     });
 
-    window.drawLandmarks(overlayContext, handLandmarks, {
-      color: "#fff7ef",
-      fillColor: "#22795d",
-      radius: 4,
-      lineWidth: 1,
-    });
+    drawPinchLink(thumbPoint, indexPoint);
+    drawTrackingPoint(palmCenter, "#ea6a2a", 12);
+    drawHandBadge(`${label} tracked`, palmCenter, "#ea6a2a");
   });
 }
 
@@ -966,6 +1189,7 @@ function stopCamera() {
   state.previousFrame = null;
   state.handCount = 0;
   state.handLastSeenAt = 0;
+  state.handTrails = [];
   state.lastStepAnnouncementIndex = -1;
 
   stopAnalysisLoop();
