@@ -106,8 +106,6 @@ textarea {
   align-items: flex-start;
   gap: 16px;
   margin-bottom: 24px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid rgba(21, 33, 29, 0.08);
 }
 
 .eyebrow {
