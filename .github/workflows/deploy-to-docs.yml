@@ -1,0 +1,53 @@
+name: Build and publish dist to docs on branch
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_branch:
+        description: 'Branch to build and push docs to'
+        required: true
+        default: 'terrences-ideas'
+
+jobs:
+  build-and-publish-docs:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout target branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.target_branch }}
+          fetch-depth: 0
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Prepare docs folder
+        run: |
+          rm -rf docs || true
+          mkdir -p docs
+          cp -R dist/* docs/
+
+      - name: Commit docs and push
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add --all docs
+          if git diff --staged --quiet; then
+            echo "No changes to docs, nothing to commit"
+          else
+            git commit -m "chore: publish built site to docs [ci skip]"
+            git push origin HEAD:${{ github.event.inputs.target_branch }}
+          fi
