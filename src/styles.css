@@ -57,6 +57,7 @@ textarea {
   margin: 0;
   font-size: clamp(1.5rem, 2vw, 2.35rem);
   line-height: 1.05;
+  font-weight: 700;
 }
 
 .workspace {
@@ -79,7 +80,13 @@ textarea {
   border-radius: 28px;
   box-shadow: var(--shadow);
   backdrop-filter: blur(18px);
-  padding: 24px;
+  padding: 32px;
+  transition: transform 200ms ease, box-shadow 200ms ease;
+}
+
+.card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 32px 72px rgba(41, 39, 34, 0.22);
 }
 
 .card::after {
@@ -98,14 +105,17 @@ textarea {
   justify-content: space-between;
   align-items: flex-start;
   gap: 16px;
-  margin-bottom: 20px;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid rgba(21, 33, 29, 0.08);
 }
 
 .eyebrow {
-  margin: 0 0 6px;
+  margin: 0 0 8px;
   font-family: "IBM Plex Mono", monospace;
-  font-size: 0.74rem;
-  letter-spacing: 0.12em;
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--ink-soft);
 }
@@ -114,7 +124,8 @@ textarea {
 .status-detail {
   margin: 0;
   color: var(--ink-soft);
-  line-height: 1.55;
+  line-height: 1.65;
+  font-size: 0.95rem;
 }
 
 .warning-text {
@@ -172,9 +183,10 @@ textarea {
 .upload-field,
 .text-input-group {
   display: grid;
-  gap: 10px;
-  margin-bottom: 18px;
+  gap: 12px;
+  margin-bottom: 20px;
   color: var(--ink-soft);
+  font-size: 0.95rem;
 }
 
 .upload-field input,
@@ -182,7 +194,15 @@ textarea {
   width: 100%;
   border-radius: 18px;
   border: 1px solid rgba(21, 33, 29, 0.14);
-  background: rgba(255, 255, 255, 0.78);
+  background: rgba(255, 255, 255, 0.88);
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.upload-field input:focus,
+textarea:focus {
+  outline: none;
+  border-color: rgba(234, 106, 42, 0.4);
+  box-shadow: 0 0 0 3px rgba(234, 106, 42, 0.08);
 }
 
 .upload-field input {
@@ -217,8 +237,10 @@ textarea {
 .secondary-button {
   border: none;
   border-radius: 18px;
-  padding: 14px 18px;
+  padding: 14px 22px;
   cursor: pointer;
+  font-weight: 600;
+  font-size: 0.95rem;
   transition: transform 160ms ease, box-shadow 160ms ease, background 160ms ease;
 }
 
@@ -239,33 +261,42 @@ textarea {
 }
 
 .current-step-copy {
-  margin: 0 0 18px;
-  font-size: 1.08rem;
-  line-height: 1.5;
+  margin: 0 0 24px;
+  font-size: 1.12rem;
+  font-weight: 500;
+  line-height: 1.55;
+  color: var(--ink);
 }
 
 .step-list {
   display: grid;
-  gap: 10px;
+  gap: 12px;
   margin: 0;
-  padding-left: 20px;
+  padding-left: 0;
+  list-style: none;
 }
 
 .step-list li {
-  padding: 12px 12px 12px 8px;
+  padding: 14px 16px;
   border-radius: 16px;
+  border-left: 3px solid transparent;
   color: var(--ink-soft);
-  line-height: 1.45;
+  line-height: 1.55;
+  font-size: 0.95rem;
+  transition: all 160ms ease;
 }
 
 .step-list li.active {
-  background: rgba(234, 106, 42, 0.12);
+  background: rgba(234, 106, 42, 0.15);
   color: var(--ink);
+  border-left-color: var(--accent);
+  font-weight: 500;
 }
 
 .step-list li.complete {
   background: rgba(34, 121, 93, 0.12);
   color: var(--success);
+  border-left-color: var(--success);
 }
 
 .mode-badge {

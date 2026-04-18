@@ -29,8 +29,9 @@ export function useSpeechGuide(onStateChange) {
 
     const utterance = new SpeechSynthesisUtterance(nextMessage);
     utterance.lang = "en-US";
-    utterance.rate = 1.02;
-    utterance.pitch = 0.96;
+    utterance.rate = 0.92;
+    utterance.pitch = 1.0;
+    utterance.volume = 0.95;
 
     utterance.onstart = () => {
       speakingRef.current = true;

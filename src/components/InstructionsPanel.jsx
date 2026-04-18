@@ -39,6 +39,7 @@ export function InstructionsPanel({
             placeholder={
               "1. Place the first piece in the center\n2. Add the next piece on top\n3. Press the final part into place"
             }
+            spellCheck="true"
           />
         </label>
 
