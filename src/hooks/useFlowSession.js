@@ -8,6 +8,7 @@ import {
   sampleFrame,
 } from "../lib/motionAnalysis";
 import { extractTextFromPdf } from "../lib/pdfLoader";
+import { snapshotPieces, verifyStep } from "../lib/stepVerifier";
 import { formatElapsed } from "../lib/time";
 import { useSpeechGuide } from "./useSpeechGuide";
 
