@@ -51,14 +51,20 @@ function drawTrail(context, points, rgbColor) {
 
 function drawTrackingPoint(context, point, color, radius) {
   const pulse = 0.72 + Math.sin(Date.now() / 180) * 0.14;
+  const outerR = radius * 1.55 * pulse;
 
   context.save();
-  context.shadowBlur = 22;
-  context.shadowColor = color;
+  // Avoid canvas shadowBlur — on many GPUs it paints a large rectangular clip
+  // that looks like a box around each joint. Use soft rings instead.
   context.fillStyle = color;
-  context.globalAlpha = 0.18;
+  context.globalAlpha = 0.12;
   context.beginPath();
-  context.arc(point.x, point.y, radius * 1.9 * pulse, 0, Math.PI * 2);
+  context.arc(point.x, point.y, outerR, 0, Math.PI * 2);
+  context.fill();
+
+  context.globalAlpha = 0.22;
+  context.beginPath();
+  context.arc(point.x, point.y, radius * 1.12 * pulse, 0, Math.PI * 2);
   context.fill();
 
   context.globalAlpha = 0.92;
@@ -69,6 +75,7 @@ function drawTrackingPoint(context, point, color, radius) {
   context.stroke();
 
   context.fillStyle = color;
+  context.globalAlpha = 0.95;
   context.beginPath();
   context.arc(point.x, point.y, radius * 0.58, 0, Math.PI * 2);
   context.fill();
