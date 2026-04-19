@@ -1,7 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 
 import { getAnalysisConfig } from "../config/analysisConfig";
-import { renderHandOverlay, clearOverlay } from "../lib/handOverlay";
+import {
+  renderHandOverlay,
+  clearOverlay,
+  filterRealHands,
+} from "../lib/handOverlay";
+import { fetchLegoRemoteScan } from "../lib/legoRemoteScan";
 import { parseInstructions } from "../lib/instructionParser";
 import {
   calculateMotionScore,
@@ -9,6 +14,7 @@ import {
 } from "../lib/motionAnalysis";
 import { extractTextFromPdf } from "../lib/pdfLoader";
 import {
+  applyRemoteLegoVerdict,
   describeSnapshotForUi,
   snapshotPieces,
   verifyStep,
@@ -318,7 +324,7 @@ export function useFlowSession() {
     });
     speakSequence(
       [
-        "That does not look right for this step.",
+        "This step may need a small fix.",
         detail.length > 220 ? `${detail.slice(0, 217).trim()}…` : detail,
       ],
       { interrupt: true }
@@ -389,6 +395,7 @@ export function useFlowSession() {
           erraticSamples: score >= config.erraticMotionThreshold ? 1 : 0,
           handSeen: handPresent,
           prePieces: preSnapshot,
+          preRemotePromise: fetchLegoRemoteScan(captureCanvasRef.current),
         };
 
         setStatus("active", "Motion detected", "Tracking the current action.");
@@ -415,70 +422,94 @@ export function useFlowSession() {
 
       if (stableFor >= config.stabilizationMs) {
         const episode = runtime.motionEpisode;
+        const episodeHandPresent = handPresent;
         runtime.motionActive = false;
         runtime.motionEpisode = null;
-        // take a post-action snapshot and verify the step
-        try {
-          const postSnapshot = snapshotPieces(captureCanvasRef.current, captureContextRef.current, config);
-          // best-effort infer step type from current instruction text
-          const stepText = runtime.steps?.[runtime.currentStepIndex]?.text ?? '';
-          const lc = stepText.toLowerCase();
-          let inferred = "place";
-          if (
-            lc.includes("pick") ||
-            lc.includes("take") ||
-            lc.includes("remove") ||
-            lc.includes("lift off") ||
-            lc.includes("take off")
-          ) {
-            inferred = "pick";
-          } else if (
-            lc.includes("attach") ||
-            lc.includes("connect") ||
-            lc.includes("snap") ||
-            lc.includes("clip") ||
-            lc.includes("join") ||
-            lc.includes("combine")
-          ) {
-            inferred = "attach";
-          } else if (
-            lc.includes("place") ||
-            lc.includes("put") ||
-            lc.includes("insert") ||
-            lc.includes("add") ||
-            lc.includes("build") ||
-            lc.includes("repeat") ||
-            lc.includes("stack") ||
-            lc.includes("fit") ||
-            lc.includes("press") ||
-            lc.includes("align")
-          ) {
-            inferred = "place";
-          }
 
-          const verdict = verifyStep(
-            episode.prePieces,
-            postSnapshot,
-            inferred,
-            stepText
-          );
-          if (verdict.result === "ok") {
-            finalizeMotionEpisode(episode, handPresent);
-          } else if (verdict.result === "needs-adjustment") {
-            registerCorrection(verdict.reason);
-          } else {
-            const sawPieces =
-              (episode.prePieces?.total || 0) + (postSnapshot?.total || 0) > 0;
-            if (sawPieces) {
+        void (async () => {
+          try {
+            const postSnapshot = snapshotPieces(
+              captureCanvasRef.current,
+              captureContextRef.current,
+              config
+            );
+            const stepText =
+              runtime.steps?.[runtime.currentStepIndex]?.text ?? "";
+            const lc = stepText.toLowerCase();
+            let inferred = "place";
+            if (
+              lc.includes("pick") ||
+              lc.includes("take") ||
+              lc.includes("remove") ||
+              lc.includes("lift off") ||
+              lc.includes("take off")
+            ) {
+              inferred = "pick";
+            } else if (
+              lc.includes("attach") ||
+              lc.includes("connect") ||
+              lc.includes("snap") ||
+              lc.includes("clip") ||
+              lc.includes("join") ||
+              lc.includes("combine")
+            ) {
+              inferred = "attach";
+            } else if (
+              lc.includes("place") ||
+              lc.includes("put") ||
+              lc.includes("insert") ||
+              lc.includes("add") ||
+              lc.includes("build") ||
+              lc.includes("repeat") ||
+              lc.includes("stack") ||
+              lc.includes("fit") ||
+              lc.includes("press") ||
+              lc.includes("align")
+            ) {
+              inferred = "place";
+            }
+
+            const [postRemote, preRemote] = await Promise.all([
+              fetchLegoRemoteScan(captureCanvasRef.current),
+              episode.preRemotePromise
+                ? Promise.race([
+                    episode.preRemotePromise,
+                    new Promise((resolve) =>
+                      window.setTimeout(() => resolve(null), 900)
+                    ),
+                  ])
+                : Promise.resolve(null),
+            ]);
+
+            let verdict = verifyStep(
+              episode.prePieces,
+              postSnapshot,
+              inferred,
+              stepText
+            );
+            verdict = applyRemoteLegoVerdict(verdict, {
+              preRemote,
+              postRemote,
+            }, inferred);
+
+            if (verdict.result === "ok") {
+              finalizeMotionEpisode(episode, episodeHandPresent);
+            } else if (verdict.result === "needs-adjustment") {
               registerCorrection(verdict.reason);
             } else {
-              finalizeMotionEpisode(episode, handPresent);
+              const sawPieces =
+                (episode.prePieces?.total || 0) + (postSnapshot?.total || 0) > 0;
+              if (sawPieces) {
+                registerCorrection(verdict.reason);
+              } else {
+                finalizeMotionEpisode(episode, episodeHandPresent);
+              }
             }
+          } catch {
+            finalizeMotionEpisode(episode, episodeHandPresent);
           }
-        } catch (e) {
-          // if verification fails unexpectedly, proceed with previous logic
-          finalizeMotionEpisode(episode, handPresent);
-        }
+        })();
+
         return;
       }
 
@@ -621,12 +652,6 @@ export function useFlowSession() {
     }
 
     await waitForGlobal(() => window.Hands, "Hand tracking");
-    // Optional: drawing_utils adds connector/landmark helpers used by handOverlay.
-    await waitForGlobal(
-      () => typeof window.drawConnectors === "function",
-      "MediaPipe drawing",
-      5000
-    ).catch(() => {});
 
     const handsTracker = new window.Hands({
       locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
@@ -640,7 +665,8 @@ export function useFlowSession() {
     });
 
     handsTracker.onResults((results) => {
-      const landmarks = results.multiHandLandmarks ?? [];
+      const rawLandmarks = results.multiHandLandmarks ?? [];
+      const landmarks = filterRealHands(rawLandmarks);
       const handedness = results.multiHandedness ?? [];
 
       runtime.handCount = landmarks.length;

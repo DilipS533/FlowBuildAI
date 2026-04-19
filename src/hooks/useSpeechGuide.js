@@ -1,11 +1,53 @@
 import { useEffect, useRef } from "react";
 
+function pickPreferredVoice() {
+  const list = window.speechSynthesis?.getVoices?.() ?? [];
+  if (!list.length) {
+    return null;
+  }
+
+  const rank = (v) => {
+    const n = `${v.name} ${v.voiceURI || ""}`.toLowerCase();
+    let score = 0;
+    if (/neural|premium|enhanced|natural/.test(n)) {
+      score += 6;
+    }
+    if (/female|woman|samantha|victoria|karen|zira|jenny|aria|moira|fiona|serena/.test(n)) {
+      score += 4;
+    }
+    if (/google|microsoft|apple/.test(n)) {
+      score += 2;
+    }
+    if (v.lang?.toLowerCase().startsWith("en")) {
+      score += 1;
+    }
+    return score;
+  };
+
+  return [...list].sort((a, b) => rank(b) - rank(a))[0] ?? list[0];
+}
+
 export function useSpeechGuide(onStateChange) {
   const queueRef = useRef([]);
   const speakingRef = useRef(false);
   const lastSpeechTextRef = useRef("");
   const lastSpeechAtRef = useRef(0);
   const restartTimerRef = useRef(null);
+  useEffect(() => {
+    if (!("speechSynthesis" in window)) {
+      return undefined;
+    }
+
+    const warm = () => {
+      window.speechSynthesis.getVoices();
+    };
+
+    warm();
+    window.speechSynthesis.addEventListener("voiceschanged", warm);
+    return () => {
+      window.speechSynthesis.removeEventListener("voiceschanged", warm);
+    };
+  }, []);
 
   function pumpQueue() {
     if (
@@ -27,10 +69,22 @@ export function useSpeechGuide(onStateChange) {
       return;
     }
 
+    try {
+      window.speechSynthesis.resume();
+    } catch {
+      /* ignore */
+    }
+
     const utterance = new SpeechSynthesisUtterance(nextMessage);
     utterance.lang = "en-US";
-    utterance.rate = 1.02;
-    utterance.pitch = 0.96;
+    utterance.rate = 0.88;
+    utterance.pitch = 1.04;
+    utterance.volume = 0.9;
+
+    const voice = pickPreferredVoice();
+    if (voice) {
+      utterance.voice = voice;
+    }
 
     utterance.onstart = () => {
       speakingRef.current = true;

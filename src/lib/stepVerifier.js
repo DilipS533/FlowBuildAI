@@ -255,6 +255,29 @@ function mentionedColorOkPlace(pre, post, mentioned) {
   return false;
 }
 
+/** New regions appeared only in colors not called out in the step — likely wrong brick. */
+function wrongColorAddedForPlace(pre, post, mentioned) {
+  if (!mentioned.length) {
+    return false;
+  }
+  const preC = countByColor(pre.pieces);
+  const postC = countByColor(post.pieces);
+  let mentionedGrew = false;
+  let unmentionedGrew = false;
+  for (const c of new Set([...Object.keys(preC), ...Object.keys(postC)])) {
+    const delta = (postC[c] || 0) - (preC[c] || 0);
+    if (delta <= 0) {
+      continue;
+    }
+    if (mentioned.includes(c)) {
+      mentionedGrew = true;
+    } else {
+      unmentionedGrew = true;
+    }
+  }
+  return unmentionedGrew && !mentionedGrew;
+}
+
 function mentionedColorOkPick(pre, post, mentioned) {
   if (!mentioned.length) {
     return null;
@@ -267,6 +290,92 @@ function mentionedColorOkPick(pre, post, mentioned) {
     }
   }
   return false;
+}
+
+function wrongColorRemovedForPick(pre, post, mentioned) {
+  if (!mentioned.length) {
+    return false;
+  }
+  const preC = countByColor(pre.pieces);
+  const postC = countByColor(post.pieces);
+  let mentionedDropped = false;
+  let unmentionedDropped = false;
+  for (const c of new Set([...Object.keys(preC), ...Object.keys(postC)])) {
+    const delta = (postC[c] || 0) - (preC[c] || 0);
+    if (delta >= 0) {
+      continue;
+    }
+    if (mentioned.includes(c)) {
+      mentionedDropped = true;
+    } else {
+      unmentionedDropped = true;
+    }
+  }
+  return unmentionedDropped && !mentionedDropped;
+}
+
+/**
+ * Optional scan service (e.g. self-hosted detector). Brickit does not ship a public HTTP API.
+ * @param {{ result: string, reason: string }} local
+ * @param {{ preRemote: object | null, postRemote: object | null }} remote
+ */
+export function applyRemoteLegoVerdict(local, remote, stepType) {
+  if (!local) {
+    return local;
+  }
+
+  const preR = remote?.preRemote;
+  const postR = remote?.postRemote;
+
+  if (!preR && !postR) {
+    return local;
+  }
+
+  if (postR?.verdict === "mismatch" || preR?.verdict === "mismatch") {
+    const hint =
+      postR?.hint ||
+      preR?.hint ||
+      "The external LEGO scan flagged a mismatch for this step.";
+    return { result: "needs-adjustment", reason: hint };
+  }
+
+  if (
+    local.result !== "ok" &&
+    postR?.verdict === "ok" &&
+    preR?.verdict !== "mismatch"
+  ) {
+    return {
+      result: "ok",
+      reason: `${local.reason} External scan marked this step as OK.`,
+    };
+  }
+
+  const preN = preR?.brickCount;
+  const postN = postR?.brickCount;
+  if (
+    typeof preN === "number" &&
+    typeof postN === "number" &&
+    local.result === "ok"
+  ) {
+    if (stepType === "place" && postN < preN) {
+      return {
+        result: "needs-adjustment",
+        reason:
+          postR?.hint ||
+          "The detector counted fewer visible bricks after placement — try centering the new piece on the mat.",
+      };
+    }
+    if (stepType === "pick" && postN > preN) {
+      return {
+        result: "needs-adjustment",
+        reason:
+          postR?.hint ||
+          "The detector still sees more brick regions than before the pick — lift the mentioned piece clear of the pile.",
+      };
+    }
+  }
+
+  return local;
 }
 
 /**
@@ -293,6 +402,12 @@ export function verifyStep(
       : "";
 
   if (stepType === "pick") {
+    if (wrongColorRemovedForPick(pre, post, mentioned)) {
+      return {
+        result: "needs-adjustment",
+        reason: `For "${snippet}", a different color region shrank, not the ${mentioned.join(", ")} you need.${mentionHint} Pick the correct piece, then hold still.`,
+      };
+    }
     if (postN < preN) {
       return { result: "ok", reason: "Fewer separate LEGO-colored regions — pick looks good." };
     }
@@ -307,6 +422,12 @@ export function verifyStep(
   }
 
   if (stepType === "place") {
+    if (wrongColorAddedForPlace(pre, post, mentioned)) {
+      return {
+        result: "needs-adjustment",
+        reason: `For "${snippet}", I saw a new blob, but not in ${mentioned.join(" or ")}.${mentionHint} Swap for the correct brick and pause on the mat.`,
+      };
+    }
     if (postN > preN) {
       return { result: "ok", reason: "New color region appeared — place looks good." };
     }

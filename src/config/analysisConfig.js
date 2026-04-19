@@ -13,8 +13,8 @@ export const BASE_CONFIG = {
   handMemoryMs: 2200,
   handRequiredWindowMs: 2600,
   erraticMotionThreshold: 18,
-  handsMinDetectionConfidence: 0.62,
-  handsMinTrackingConfidence: 0.55,
+  handsMinDetectionConfidence: 0.72,
+  handsMinTrackingConfidence: 0.62,
 };
 
 export const DEMO_CONFIG = {
