@@ -416,19 +416,57 @@ export function useFlowSession() {
           // best-effort infer step type from current instruction text
           const stepText = runtime.steps?.[runtime.currentStepIndex]?.text ?? '';
           const lc = stepText.toLowerCase();
-          let inferred = 'place';
-          if (lc.includes('pick') || lc.includes('take') || lc.includes('remove')) inferred = 'pick';
-          else if (lc.includes('attach') || lc.includes('connect') || lc.includes('snap')) inferred = 'attach';
-          else if (lc.includes('place') || lc.includes('put') || lc.includes('insert')) inferred = 'place';
+          let inferred = "place";
+          if (
+            lc.includes("pick") ||
+            lc.includes("take") ||
+            lc.includes("remove") ||
+            lc.includes("lift off") ||
+            lc.includes("take off")
+          ) {
+            inferred = "pick";
+          } else if (
+            lc.includes("attach") ||
+            lc.includes("connect") ||
+            lc.includes("snap") ||
+            lc.includes("clip") ||
+            lc.includes("join") ||
+            lc.includes("combine")
+          ) {
+            inferred = "attach";
+          } else if (
+            lc.includes("place") ||
+            lc.includes("put") ||
+            lc.includes("insert") ||
+            lc.includes("add") ||
+            lc.includes("build") ||
+            lc.includes("repeat") ||
+            lc.includes("stack") ||
+            lc.includes("fit") ||
+            lc.includes("press") ||
+            lc.includes("align")
+          ) {
+            inferred = "place";
+          }
 
-          const verdict = verifyStep(episode.prePieces, postSnapshot, inferred);
-          if (verdict.result === 'ok') {
+          const verdict = verifyStep(
+            episode.prePieces,
+            postSnapshot,
+            inferred,
+            stepText
+          );
+          if (verdict.result === "ok") {
             finalizeMotionEpisode(episode, handPresent);
-          } else if (verdict.result === 'needs-adjustment') {
+          } else if (verdict.result === "needs-adjustment") {
             registerCorrection(verdict.reason);
           } else {
-            // unclear: fall back to motion-only confirmation
-            finalizeMotionEpisode(episode, handPresent);
+            const sawPieces =
+              (episode.prePieces?.total || 0) + (postSnapshot?.total || 0) > 0;
+            if (sawPieces) {
+              registerCorrection(verdict.reason);
+            } else {
+              finalizeMotionEpisode(episode, handPresent);
+            }
           }
         } catch (e) {
           // if verification fails unexpectedly, proceed with previous logic

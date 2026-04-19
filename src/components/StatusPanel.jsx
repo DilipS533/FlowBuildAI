@@ -64,13 +64,12 @@ export function StatusPanel({
       <article className="card hint-card">
         <p className="eyebrow">Verification Model</p>
         <p className="support-text">
-          Each step watches for a motion episode (frame differencing on the
-          downsampled camera feed), hand activity from MediaPipe, then compares
-          color-grouped piece regions before and after the workspace
-          stabilizes. Pick, place,
-          and attach language in the step text steers the checker; otherwise any
-          visible piece-count change can confirm progress. Demo Mode lowers
-          motion thresholds and timing so short gestures still register.
+          After each action the app compares coarse LEGO-like color blobs (not
+          official part IDs) before and after motion. Step wording such as pick,
+          place, attach, add, or build steers checks, and colors named in the
+          text (red, blue, yellow, etc.) are used when possible. If the view does
+          not change enough, you will hear a specific correction. Demo Mode keeps
+          motion thresholds easier to hit.
         </p>
       </article>
     </aside>

@@ -1,8 +1,85 @@
-// Lightweight rule-based step verifier for quick hackathon checks.
-// Exports snapshotPieces(canvas, ctx, config) and verifyStep(pre, post, stepType, opts)
+// Client-side LEGO-oriented verification: color-blob regions on a downsampled
+// camera frame (not true part-ID). Used to compare before/after each motion.
+
+const COLOR_LEXICON = [
+  ["red", /\b(red|crimson|burgundy)\b/i],
+  ["blue", /\b(blue|azure|navy)\b/i],
+  ["yellow", /\b(yellow|gold)\b/i],
+  ["green", /\b(green|lime|olive)\b/i],
+  ["white", /\b(white|light\s*gray|light\s*grey)\b/i],
+  ["black", /\b(black|dark\s*gray|dark\s*grey)\b/i],
+  ["orange", /\b(orange|peach)\b/i],
+  ["brown", /\b(brown|tan|earth)\b/i],
+];
+
+/** Colors explicitly mentioned in instruction text (subset of palette names). */
+export function extractMentionedLegoColors(instructionText) {
+  if (!instructionText || typeof instructionText !== "string") {
+    return [];
+  }
+  const found = new Set();
+  for (const [name, re] of COLOR_LEXICON) {
+    if (re.test(instructionText)) {
+      found.add(name);
+    }
+  }
+  return [...found];
+}
+
+function countByColor(pieces) {
+  const m = {};
+  for (const p of pieces || []) {
+    m[p.color] = (m[p.color] || 0) + 1;
+  }
+  return m;
+}
+
+function maxBboxArea(pieces) {
+  if (!pieces?.length) {
+    return 0;
+  }
+  return pieces.reduce((max, p) => {
+    const a = (p.bbox?.w || 0) * (p.bbox?.h || 0);
+    return Math.max(max, a);
+  }, 0);
+}
+
+/** True if two differently colored pre pieces overlap more visibly after action (attach). */
+function attachOverlapImproved(prePieces, postPieces) {
+  if (!prePieces?.length || !postPieces?.length) {
+    return false;
+  }
+
+  for (let i = 0; i < prePieces.length; i += 1) {
+    for (let j = i + 1; j < prePieces.length; j += 1) {
+      const a = prePieces[i];
+      const b = prePieces[j];
+      if (a.color === b.color) {
+        continue;
+      }
+      const preO = bboxOverlapArea(a.bbox, b.bbox);
+      for (const q of postPieces) {
+        const oa = bboxOverlapArea(q.bbox, a.bbox);
+        const ob = bboxOverlapArea(q.bbox, b.bbox);
+        if (oa > 0 && ob > 0 && oa + ob > preO * 1.2) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
+function largestRegionGrew(prePieces, postPieces, ratio = 1.18) {
+  const preMax = maxBboxArea(prePieces);
+  const postMax = maxBboxArea(postPieces);
+  return postMax > preMax * ratio && postMax > 400;
+}
 
 export function snapshotPieces(canvas, ctx, config) {
-  if (!canvas || !ctx) return { pieces: [], total: 0 };
+  if (!canvas || !ctx) {
+    return { pieces: [], total: 0 };
+  }
 
   const w = config.captureWidth;
   const h = config.captureHeight;
@@ -20,12 +97,14 @@ export function snapshotPieces(canvas, ctx, config) {
   const cellH = Math.floor(h / gh);
 
   const palette = [
-    { name: 'red', rgb: [200, 40, 50] },
-    { name: 'blue', rgb: [50, 80, 200] },
-    { name: 'yellow', rgb: [230, 200, 40] },
-    { name: 'green', rgb: [40, 150, 60] },
-    { name: 'white', rgb: [240, 240, 240] },
-    { name: 'black', rgb: [30, 30, 30] },
+    { name: "red", rgb: [200, 45, 55] },
+    { name: "blue", rgb: [45, 90, 200] },
+    { name: "yellow", rgb: [235, 205, 45] },
+    { name: "green", rgb: [35, 145, 65] },
+    { name: "white", rgb: [242, 242, 242] },
+    { name: "black", rgb: [28, 28, 32] },
+    { name: "orange", rgb: [220, 105, 35] },
+    { name: "brown", rgb: [115, 72, 42] },
   ];
 
   function nearestPalette(r, g, b) {
@@ -41,23 +120,23 @@ export function snapshotPieces(canvas, ctx, config) {
         best = p;
       }
     }
-    return bestDist < 22000 ? best.name : null;
+    return bestDist < 24000 ? best.name : null;
   }
 
   const grid = Array.from({ length: gh }, () => Array(gw).fill(null));
 
-  for (let gy = 0; gy < gh; gy++) {
-    for (let gx = 0; gx < gw; gx++) {
-      let rSum = 0,
-        gSum = 0,
-        bSum = 0,
-        count = 0;
+  for (let gy = 0; gy < gh; gy += 1) {
+    for (let gx = 0; gx < gw; gx += 1) {
+      let rSum = 0;
+      let gSum = 0;
+      let bSum = 0;
+      let count = 0;
       const sx = gx * cellW;
       const sy = gy * cellH;
-      for (let y = 0; y < cellH; y++) {
-        for (let x = 0; x < cellW; x++) {
-          const px = Math.min(w - 1, sx + x);
-          const py = Math.min(h - 1, sy + y);
+      for (let yy = 0; yy < cellH; yy += 1) {
+        for (let xx = 0; xx < cellW; xx += 1) {
+          const px = Math.min(w - 1, sx + xx);
+          const py = Math.min(h - 1, sy + yy);
           const idx = (py * w + px) * 4;
           rSum += img[idx];
           gSum += img[idx + 1];
@@ -74,9 +153,11 @@ export function snapshotPieces(canvas, ctx, config) {
 
   const visited = Array.from({ length: gh }, () => Array(gw).fill(false));
   const pieces = [];
-  for (let y = 0; y < gh; y++) {
-    for (let x = 0; x < gw; x++) {
-      if (visited[y][x] || !grid[y][x]) continue;
+  for (let y = 0; y < gh; y += 1) {
+    for (let x = 0; x < gw; x += 1) {
+      if (visited[y][x] || !grid[y][x]) {
+        continue;
+      }
       const color = grid[y][x];
       const stack = [[x, y]];
       const cells = [];
@@ -84,9 +165,21 @@ export function snapshotPieces(canvas, ctx, config) {
       while (stack.length) {
         const [cx, cy] = stack.pop();
         cells.push([cx, cy]);
-        const nbs = [ [cx-1,cy],[cx+1,cy],[cx,cy-1],[cx,cy+1] ];
+        const nbs = [
+          [cx - 1, cy],
+          [cx + 1, cy],
+          [cx, cy - 1],
+          [cx, cy + 1],
+        ];
         for (const [nx, ny] of nbs) {
-          if (nx >= 0 && ny >= 0 && nx < gw && ny < gh && !visited[ny][nx] && grid[ny][nx] === color) {
+          if (
+            nx >= 0 &&
+            ny >= 0 &&
+            nx < gw &&
+            ny < gh &&
+            !visited[ny][nx] &&
+            grid[ny][nx] === color
+          ) {
             visited[ny][nx] = true;
             stack.push([nx, ny]);
           }
@@ -94,14 +187,21 @@ export function snapshotPieces(canvas, ctx, config) {
       }
 
       if (cells.length >= 10) {
-        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        let minX = Infinity;
+        let minY = Infinity;
+        let maxX = -Infinity;
+        let maxY = -Infinity;
         for (const [cx, cy] of cells) {
           minX = Math.min(minX, cx * cellW);
           minY = Math.min(minY, cy * cellH);
           maxX = Math.max(maxX, (cx + 1) * cellW);
           maxY = Math.max(maxY, (cy + 1) * cellH);
         }
-        pieces.push({ color, bbox: { x: minX, y: minY, w: maxX - minX, h: maxY - minY }, cells: cells.length });
+        pieces.push({
+          color,
+          bbox: { x: minX, y: minY, w: maxX - minX, h: maxY - minY },
+          cells: cells.length,
+        });
       }
     }
   }
@@ -109,76 +209,124 @@ export function snapshotPieces(canvas, ctx, config) {
   return { pieces, total: pieces.length };
 }
 
-function colorSummary(pieces) {
+function colorSummary(pieceList) {
   const counts = {};
-  for (const p of pieces || []) {
+  for (const p of pieceList || []) {
     counts[p.color] = (counts[p.color] || 0) + 1;
   }
   const parts = Object.entries(counts).map(([c, n]) => `${n} ${c}`);
-  return parts.length ? parts.join(", ") : "no distinct color blobs";
+  return parts.length ? parts.join(", ") : "no separate color regions";
 }
 
-export function verifyStep(preSnapshot, postSnapshot, stepType) {
-  const pre = preSnapshot || { total: 0, pieces: [] };
-  const post = postSnapshot || { total: 0, pieces: [] };
+function stepSnippet(text, max = 90) {
+  const t = (text || "").replace(/\s+/g, " ").trim();
+  if (!t) {
+    return "this step";
+  }
+  return t.length > max ? `${t.slice(0, max - 1).trim()}…` : t;
+}
+
+function mentionedColorOkPlace(pre, post, mentioned) {
+  if (!mentioned.length) {
+    return null;
+  }
+  const preC = countByColor(pre.pieces);
+  const postC = countByColor(post.pieces);
+  for (const c of mentioned) {
+    if ((postC[c] || 0) > (preC[c] || 0)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function mentionedColorOkPick(pre, post, mentioned) {
+  if (!mentioned.length) {
+    return null;
+  }
+  const preC = countByColor(pre.pieces);
+  const postC = countByColor(post.pieces);
+  for (const c of mentioned) {
+    if ((postC[c] || 0) < (preC[c] || 0)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Compare color-blob snapshots for step progress.
+ * @param {string} [instructionText] — used for LEGO color words + clearer hints.
+ */
+export function verifyStep(
+  preSnapshot,
+  postSnapshot,
+  stepType,
+  instructionText = ""
+) {
+  const pre = preSnapshot || { pieces: [], total: 0 };
+  const post = postSnapshot || { pieces: [], total: 0 };
   const preN = pre.total;
   const postN = post.total;
   const preDesc = colorSummary(pre.pieces);
   const postDesc = colorSummary(post.pieces);
+  const snippet = stepSnippet(instructionText);
+  const mentioned = extractMentionedLegoColors(instructionText);
+  const mentionHint =
+    mentioned.length > 0
+      ? ` Your instruction mentions ${mentioned.join(", ")}.`
+      : "";
 
   if (stepType === "pick") {
     if (postN < preN) {
-      return { result: "ok", reason: "Piece removed from workspace" };
+      return { result: "ok", reason: "Fewer separate LEGO-colored regions — pick looks good." };
+    }
+    const colorOk = mentionedColorOkPick(pre, post, mentioned);
+    if (colorOk) {
+      return { result: "ok", reason: "Mentioned color regions decreased as expected for a pick." };
     }
     return {
       result: "needs-adjustment",
-      reason: `This step looks like a pick, but I still see about the same number of separate LEGO-colored regions (${postN} now versus ${preN} before). Try lifting a piece out of the frame.`,
+      reason: `For "${snippet}", I expected a piece to leave the mat (fewer color blobs). Still about ${postN} regions vs ${preN} before.${mentionHint} Try removing the part from the camera view, then hold still.`,
     };
   }
 
   if (stepType === "place") {
     if (postN > preN) {
-      return { result: "ok", reason: "New piece appeared in workspace" };
+      return { result: "ok", reason: "New color region appeared — place looks good." };
+    }
+    const colorOk = mentionedColorOkPlace(pre, post, mentioned);
+    if (colorOk) {
+      return { result: "ok", reason: "A mentioned color gained a new region — place looks good." };
     }
     return {
       result: "needs-adjustment",
-      reason: `This step looks like a place, but I did not see a new separate region appear. Before: ${preDesc}. After: ${postDesc}. Add the piece into view and hold still briefly.`,
+      reason: `For "${snippet}", I did not see a new LEGO-colored region. Before: ${preDesc}. After: ${postDesc}.${mentionHint} Add the brick into frame, then pause so the camera can confirm.`,
     };
   }
 
   if (stepType === "attach") {
     if (postN < preN) {
-      return { result: "ok", reason: "Pieces merged (attachment likely)" };
+      return { result: "ok", reason: "Regions merged — attach likely succeeded." };
     }
-
-    for (const pa of pre.pieces) {
-      for (const pb of pre.pieces) {
-        if (pa === pb) continue;
-        const overlapBefore = bboxOverlapArea(pa.bbox, pb.bbox);
-        const match = post.pieces.find(
-          (p) => p.color === pa.color || p.color === pb.color
-        );
-        if (match) {
-          const overlapAfter = overlapBefore;
-          if (overlapAfter > 0) {
-            return { result: "ok", reason: "Proximity/overlap observed" };
-          }
-        }
-      }
+    if (attachOverlapImproved(pre.pieces, post.pieces)) {
+      return { result: "ok", reason: "Pieces overlap more after the motion — attach likely succeeded." };
     }
-
+    if (largestRegionGrew(pre.pieces, post.pieces)) {
+      return { result: "ok", reason: "Largest visible region grew — parts may be pressed together." };
+    }
     return {
       result: "needs-adjustment",
-      reason: `This step looks like an attach, but regions did not merge. I counted ${preN} regions before and ${postN} after. Try pressing pieces together, then hold still.`,
+      reason: `For "${snippet}", I did not see pieces join clearly. Count stayed near ${preN} → ${postN}.${mentionHint} Press parts together firmly, keep hands in frame, then hold still.`,
     };
   }
 
   if (postN !== preN) {
-    return { result: "ok", reason: "Piece count changed" };
+    return { result: "ok", reason: "Workspace color layout changed." };
   }
   return {
     result: "unclear",
-    reason: `I could not see a clear change in the workspace (${preN} color regions before and after). Adjust the build so pieces move, then pause.`,
+    reason: `For "${snippet}", the workspace looked unchanged to the camera (${preN} color regions).${mentionHint} Make a clear move, then pause on the mat.`,
   };
 }
 
@@ -187,6 +335,8 @@ function bboxOverlapArea(a, b) {
   const y1 = Math.max(a.y, b.y);
   const x2 = Math.min(a.x + a.w, b.x + b.w);
   const y2 = Math.min(a.y + a.h, b.y + b.h);
-  if (x2 <= x1 || y2 <= y1) return 0;
+  if (x2 <= x1 || y2 <= y1) {
+    return 0;
+  }
   return (x2 - x1) * (y2 - y1);
 }
