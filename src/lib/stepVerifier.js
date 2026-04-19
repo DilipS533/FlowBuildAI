@@ -93,7 +93,7 @@ export function snapshotPieces(canvas, ctx, config) {
         }
       }
 
-      if (cells.length >= 3) {
+      if (cells.length >= 10) {
         let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
         for (const [cx, cy] of cells) {
           minX = Math.min(minX, cx * cellW);
@@ -109,55 +109,77 @@ export function snapshotPieces(canvas, ctx, config) {
   return { pieces, total: pieces.length };
 }
 
+function colorSummary(pieces) {
+  const counts = {};
+  for (const p of pieces || []) {
+    counts[p.color] = (counts[p.color] || 0) + 1;
+  }
+  const parts = Object.entries(counts).map(([c, n]) => `${n} ${c}`);
+  return parts.length ? parts.join(", ") : "no distinct color blobs";
+}
+
 export function verifyStep(preSnapshot, postSnapshot, stepType) {
-  // Basic heuristics
   const pre = preSnapshot || { total: 0, pieces: [] };
   const post = postSnapshot || { total: 0, pieces: [] };
+  const preN = pre.total;
+  const postN = post.total;
+  const preDesc = colorSummary(pre.pieces);
+  const postDesc = colorSummary(post.pieces);
 
-  if (stepType === 'pick') {
-    if (post.total < pre.total) {
-      return { result: 'ok', reason: 'Piece removed from workspace' };
+  if (stepType === "pick") {
+    if (postN < preN) {
+      return { result: "ok", reason: "Piece removed from workspace" };
     }
-    return { result: 'needs-adjustment', reason: 'No piece disappearance detected' };
+    return {
+      result: "needs-adjustment",
+      reason: `This step looks like a pick, but I still see about the same number of separate LEGO-colored regions (${postN} now versus ${preN} before). Try lifting a piece out of the frame.`,
+    };
   }
 
-  if (stepType === 'place') {
-    if (post.total > pre.total) {
-      return { result: 'ok', reason: 'New piece appeared in workspace' };
+  if (stepType === "place") {
+    if (postN > preN) {
+      return { result: "ok", reason: "New piece appeared in workspace" };
     }
-    return { result: 'needs-adjustment', reason: 'No new piece detected' };
+    return {
+      result: "needs-adjustment",
+      reason: `This step looks like a place, but I did not see a new separate region appear. Before: ${preDesc}. After: ${postDesc}. Add the piece into view and hold still briefly.`,
+    };
   }
 
-  if (stepType === 'attach') {
-    // merging heuristic: if total decreased or two bboxes now overlap
-    if (post.total < pre.total) {
-      return { result: 'ok', reason: 'Pieces merged (attachment likely)' };
+  if (stepType === "attach") {
+    if (postN < preN) {
+      return { result: "ok", reason: "Pieces merged (attachment likely)" };
     }
 
-    // check overlap growth between any pre pieces
     for (const pa of pre.pieces) {
       for (const pb of pre.pieces) {
         if (pa === pb) continue;
         const overlapBefore = bboxOverlapArea(pa.bbox, pb.bbox);
-        // find corresponding in post by color (best-effort)
-        const match = post.pieces.find((p) => p.color === pa.color || p.color === pb.color);
+        const match = post.pieces.find(
+          (p) => p.color === pa.color || p.color === pb.color
+        );
         if (match) {
-          const overlapAfter = overlapBefore; // conservative fallback
+          const overlapAfter = overlapBefore;
           if (overlapAfter > 0) {
-            return { result: 'ok', reason: 'Proximity/overlap observed' };
+            return { result: "ok", reason: "Proximity/overlap observed" };
           }
         }
       }
     }
 
-    return { result: 'needs-adjustment', reason: 'No attachment observed' };
+    return {
+      result: "needs-adjustment",
+      reason: `This step looks like an attach, but regions did not merge. I counted ${preN} regions before and ${postN} after. Try pressing pieces together, then hold still.`,
+    };
   }
 
-  // default: rely on presence of motion + hand confirmation elsewhere
-  if (post.total !== pre.total) {
-    return { result: 'ok', reason: 'Piece count changed' };
+  if (postN !== preN) {
+    return { result: "ok", reason: "Piece count changed" };
   }
-  return { result: 'unclear', reason: 'No clear difference detected' };
+  return {
+    result: "unclear",
+    reason: `I could not see a clear change in the workspace (${preN} color regions before and after). Adjust the build so pieces move, then pause.`,
+  };
 }
 
 function bboxOverlapArea(a, b) {

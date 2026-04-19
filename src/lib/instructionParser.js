@@ -1,5 +1,12 @@
+function preprocessInstructionText(rawText) {
+  let t = rawText.replace(/\r/g, "").replace(/\u00a0/g, " ");
+  t = t.replace(/[\u200b-\u200d\ufeff]/g, "");
+  t = t.replace(/[ \t]+\n/g, "\n");
+  return t.replace(/\n{3,}/g, "\n\n").trim();
+}
+
 export function parseInstructions(rawText) {
-  const cleaned = rawText.replace(/\r/g, "").trim();
+  const cleaned = preprocessInstructionText(rawText);
 
   if (!cleaned) {
     return [];
@@ -8,7 +15,17 @@ export function parseInstructions(rawText) {
   const lines = cleaned
     .split("\n")
     .map((line) => line.trim())
-    .filter(Boolean);
+    .filter(Boolean)
+    .filter((line) => {
+      if (line.length < 2) {
+        return false;
+      }
+      const letters = (line.match(/[a-zA-Z]/g) || []).length;
+      if (letters === 0 && line.length < 40) {
+        return false;
+      }
+      return true;
+    });
 
   const numberedOrBulleted = [];
   let current = "";

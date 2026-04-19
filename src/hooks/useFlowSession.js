@@ -309,9 +309,13 @@ export function useFlowSession() {
       sessionState: "Needs adjustment",
       guidanceState: "Correcting",
     });
-    speakSequence(["That doesn't seem right, try adjusting it."], {
-      interrupt: true,
-    });
+    speakSequence(
+      [
+        "That does not look right for this step.",
+        detail.length > 220 ? `${detail.slice(0, 217).trim()}…` : detail,
+      ],
+      { interrupt: true }
+    );
     addLog(`Correction issued: ${detail}`);
   }
 
@@ -597,12 +601,6 @@ export function useFlowSession() {
       // captured (downsampled) frame and draw bounding boxes for detected
       // LEGO piece candidates. This is a lightweight heuristic that groups
       // similarly-colored regions on the small capture canvas.
-      try {
-        detectPiecesAndDraw();
-      } catch (e) {
-        // non-fatal
-      }
-
       patchUi({
         handCount: landmarks.length,
       });
@@ -610,173 +608,6 @@ export function useFlowSession() {
 
     runtime.handsTracker = handsTracker;
     return handsTracker;
-  }
-
-  // Quick heuristic detector: groups similarly-colored regions from the
-  // capture canvas into candidate pieces and draws boxes on the overlay.
-  function detectPiecesAndDraw() {
-    const canvas = captureCanvasRef.current;
-    const overlay = overlayRef.current;
-    const ctx = captureContextRef.current || (canvas && canvas.getContext && canvas.getContext('2d'));
-    if (!canvas || !overlay || !ctx) return [];
-
-    const config = getAnalysisConfig(ui.demoMode);
-    const w = config.captureWidth;
-    const h = config.captureHeight;
-
-    let img;
-    try {
-      img = ctx.getImageData(0, 0, w, h).data;
-    } catch (e) {
-      return [];
-    }
-
-    // downsample into cells for speed
-    const cell = 4;
-    const gw = Math.max(8, Math.floor(w / cell));
-    const gh = Math.max(6, Math.floor(h / cell));
-    const cellW = Math.floor(w / gw);
-    const cellH = Math.floor(h / gh);
-
-    const palette = [
-      { name: 'red', rgb: [200, 40, 50], hex: '#ea6a2a' },
-      { name: 'blue', rgb: [50, 80, 200], hex: '#3b82f6' },
-      { name: 'yellow', rgb: [230, 200, 40], hex: '#ffd166' },
-      { name: 'green', rgb: [40, 150, 60], hex: '#34d399' },
-      { name: 'white', rgb: [240, 240, 240], hex: '#f8fafc' },
-      { name: 'black', rgb: [30, 30, 30], hex: '#0f172a' },
-    ];
-
-    function nearestPalette(r, g, b) {
-      let best = null;
-      let bestDist = Infinity;
-      for (const p of palette) {
-        const dr = r - p.rgb[0];
-        const dg = g - p.rgb[1];
-        const db = b - p.rgb[2];
-        const d = dr * dr + dg * dg + db * db;
-        if (d < bestDist) {
-          bestDist = d;
-          best = p;
-        }
-      }
-      // threshold: ignore near-gray / background
-      return bestDist < 22000 ? best.name : null;
-    }
-
-    // grid of color names or null
-    const grid = Array.from({ length: gh }, () => Array(gw).fill(null));
-
-    for (let gy = 0; gy < gh; gy++) {
-      for (let gx = 0; gx < gw; gx++) {
-        let rSum = 0,
-          gSum = 0,
-          bSum = 0,
-          count = 0;
-        const sx = gx * cellW;
-        const sy = gy * cellH;
-        for (let y = 0; y < cellH; y++) {
-          for (let x = 0; x < cellW; x++) {
-            const px = Math.min(w - 1, sx + x);
-            const py = Math.min(h - 1, sy + y);
-            const idx = (py * w + px) * 4;
-            rSum += img[idx];
-            gSum += img[idx + 1];
-            bSum += img[idx + 2];
-            count += 1;
-          }
-        }
-        const rAvg = rSum / count;
-        const gAvg = gSum / count;
-        const bAvg = bSum / count;
-        grid[gy][gx] = nearestPalette(rAvg, gAvg, bAvg);
-      }
-    }
-
-    // flood-fill connected components
-    const visited = Array.from({ length: gh }, () => Array(gw).fill(false));
-    const pieces = [];
-    for (let y = 0; y < gh; y++) {
-      for (let x = 0; x < gw; x++) {
-        if (visited[y][x] || !grid[y][x]) continue;
-        const color = grid[y][x];
-        const stack = [[x, y]];
-        const cells = [];
-        visited[y][x] = true;
-        while (stack.length) {
-          const [cx, cy] = stack.pop();
-          cells.push([cx, cy]);
-          const nbs = [ [cx-1,cy],[cx+1,cy],[cx,cy-1],[cx,cy+1] ];
-          for (const [nx, ny] of nbs) {
-            if (nx >= 0 && ny >= 0 && nx < gw && ny < gh && !visited[ny][nx] && grid[ny][nx] === color) {
-              visited[ny][nx] = true;
-              stack.push([nx, ny]);
-            }
-          }
-        }
-
-        if (cells.length >= 3) {
-          // compute bbox in capture-coordinates
-          let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-          for (const [cx, cy] of cells) {
-            minX = Math.min(minX, cx * cellW);
-            minY = Math.min(minY, cy * cellH);
-            maxX = Math.max(maxX, (cx + 1) * cellW);
-            maxY = Math.max(maxY, (cy + 1) * cellH);
-          }
-          pieces.push({ color, bbox: { x: minX, y: minY, w: maxX - minX, h: maxY - minY }, cells: cells.length });
-        }
-      }
-    }
-
-    // draw boxes on overlay (scaled to overlay size)
-    try {
-      function traceRoundedRect(context, x, y, width, height, radius) {
-        const safeRadius = Math.min(radius, width / 2, height / 2);
-        context.beginPath();
-        context.moveTo(x + safeRadius, y);
-        context.lineTo(x + width - safeRadius, y);
-        context.quadraticCurveTo(x + width, y, x + width, y + safeRadius);
-        context.lineTo(x + width, y + height - safeRadius);
-        context.quadraticCurveTo(x + width, y + height, x + width - safeRadius, y + height);
-        context.lineTo(x + safeRadius, y + height);
-        context.quadraticCurveTo(x, y + height, x, y + height - safeRadius);
-        context.lineTo(x, y + safeRadius);
-        context.quadraticCurveTo(x, y, x + safeRadius, y);
-        context.closePath();
-      }
-      const octx = overlay.getContext('2d');
-      const ow = overlay.width;
-      const oh = overlay.height;
-      const scaleX = ow / w;
-      const scaleY = oh / h;
-
-      for (const p of pieces) {
-        const hex = (palette.find((p2) => p2.name === p.color) || palette[0]).hex;
-        const x = p.bbox.x * scaleX;
-        const y = p.bbox.y * scaleY;
-        const width = Math.max(6, p.bbox.w * scaleX);
-        const height = Math.max(6, p.bbox.h * scaleY);
-
-        octx.save();
-        octx.lineWidth = 2.5;
-        octx.strokeStyle = hex;
-        octx.fillStyle = hex + '33';
-        traceRoundedRect(octx, x, y, width, height, 8);
-        octx.stroke();
-        octx.fill();
-        octx.restore();
-      }
-    } catch (e) {
-      // overlay drawing is non-fatal
-    }
-
-    // update UI count briefly
-    if (pieces.length) {
-      patchUi({ handState: `${runtimeRef.current.handCount} hands • ${pieces.length} pieces` });
-    }
-
-    return pieces;
   }
 
   async function runHandLoop() {
@@ -884,6 +715,31 @@ export function useFlowSession() {
     syncProgressUi();
     addLog(`Loaded ${steps.length} instruction step${steps.length === 1 ? "" : "s"}.`);
     maybeStartSession();
+    // After maybeStartSession so guide speech replaces the single "next step" cue when the camera is already live.
+    announceLoadedGuide(steps);
+  }
+
+  /** Read parsed steps aloud so the user hears the same flow as on screen. */
+  function announceLoadedGuide(steps) {
+    const maxSpoken = 8;
+    const lines = [
+      `Loaded ${steps.length} assembly step${steps.length === 1 ? "" : "s"} from your instructions.`,
+    ];
+
+    for (let i = 0; i < Math.min(maxSpoken, steps.length); i += 1) {
+      const raw = steps[i].text || "";
+      const shortened =
+        raw.length > 140 ? `${raw.slice(0, 137).trim()}…` : raw;
+      lines.push(`Step ${steps[i].step}: ${shortened}`);
+    }
+
+    if (steps.length > maxSpoken) {
+      lines.push(
+        `Steps ${maxSpoken + 1} through ${steps.length} are listed in the left panel.`
+      );
+    }
+
+    speakSequence(lines, { interrupt: true });
   }
 
   async function handlePdfUpload(event) {
