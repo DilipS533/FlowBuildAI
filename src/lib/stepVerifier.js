@@ -209,6 +209,21 @@ export function snapshotPieces(canvas, ctx, config) {
   return { pieces, total: pieces.length };
 }
 
+/** Short caption for the UI — coarse LEGO-like hues, not official part IDs. */
+export function describeSnapshotForUi(snapshot) {
+  if (!snapshot?.total) {
+    return "Mat: no separated color blobs yet — center the build and add light.";
+  }
+  const counts = {};
+  for (const p of snapshot.pieces) {
+    counts[p.color] = (counts[p.color] || 0) + 1;
+  }
+  const parts = Object.entries(counts)
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([c, n]) => `${n}× ${c}`);
+  return `Mat (hue blobs, not part numbers): ${parts.join(" · ")}`;
+}
+
 function colorSummary(pieceList) {
   const counts = {};
   for (const p of pieceList || []) {

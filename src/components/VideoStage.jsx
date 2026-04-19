@@ -4,6 +4,7 @@ export function VideoStage({
   handCount,
   correctionCount,
   elapsedValue,
+  workspaceScanSummary,
   showCompletion,
   completionSummary,
   videoRef,
@@ -47,6 +48,10 @@ export function VideoStage({
               <p>Camera inactive</p>
               <span>Start the feed to enable motion and hand analysis.</span>
             </div>
+          ) : null}
+
+          {cameraActive && workspaceScanSummary ? (
+            <p className="workspace-scan-caption">{workspaceScanSummary}</p>
           ) : null}
         </div>
 

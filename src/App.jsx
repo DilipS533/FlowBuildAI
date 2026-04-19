@@ -47,6 +47,7 @@ export default function App() {
           handCount={ui.handCount}
           correctionCount={ui.correctionCount}
           elapsedValue={ui.elapsedValue}
+          workspaceScanSummary={ui.workspaceScanSummary}
           showCompletion={ui.showCompletion}
           completionSummary={ui.completionSummary}
           videoRef={videoRef}

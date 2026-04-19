@@ -64,12 +64,11 @@ export function StatusPanel({
       <article className="card hint-card">
         <p className="eyebrow">Verification Model</p>
         <p className="support-text">
-          After each action the app compares coarse LEGO-like color blobs (not
-          official part IDs) before and after motion. Step wording such as pick,
-          place, attach, add, or build steers checks, and colors named in the
-          text (red, blue, yellow, etc.) are used when possible. If the view does
-          not change enough, you will hear a specific correction. Demo Mode keeps
-          motion thresholds easier to hit.
+          Hands are drawn as small dots on the video. LEGO-like feedback uses
+          the same low-res color scan as the caption under the feed (hue blobs,
+          not part numbers) plus before/after motion checks. Step wording and
+          named colors steer pick/place/attach logic; Demo Mode eases motion
+          thresholds.
         </p>
       </article>
     </aside>

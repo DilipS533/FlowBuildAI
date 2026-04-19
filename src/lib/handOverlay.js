@@ -1,4 +1,4 @@
-import { TRACKED_POINTS, TRAIL_LIMIT } from "../config/analysisConfig";
+import { TRACKED_POINTS } from "../config/analysisConfig";
 
 function getOverlayContext(overlayElement) {
   return overlayElement.getContext("2d");
@@ -11,97 +11,26 @@ function getCanvasPoint(overlayElement, landmark) {
   };
 }
 
-function updateHandTrail(handTrails, handIndex, point) {
-  if (!handTrails[handIndex]) {
-    handTrails[handIndex] = [];
-  }
-
-  const trail = handTrails[handIndex];
-  trail.push(point);
-
-  if (trail.length > TRAIL_LIMIT) {
-    trail.splice(0, trail.length - TRAIL_LIMIT);
-  }
-}
-
-function drawTrail(context, points, rgbColor) {
-  if (points.length < 2) {
-    return;
-  }
-
-  context.save();
-  context.lineCap = "round";
-  context.lineJoin = "round";
-
-  for (let index = 1; index < points.length; index += 1) {
-    const start = points[index - 1];
-    const end = points[index];
-    const alpha = index / points.length;
-
-    context.beginPath();
-    context.strokeStyle = `rgba(${rgbColor}, ${(alpha * 0.72).toFixed(2)})`;
-    context.lineWidth = 2 + alpha * 4;
-    context.moveTo(start.x, start.y);
-    context.lineTo(end.x, end.y);
-    context.stroke();
-  }
-
-  context.restore();
-}
-
+/** Small solid nodes only — no trails, pinch line, labels, or shadows (those read as “boxes” on some GPUs). */
 function drawTrackingPoint(context, point, color, radius) {
-  const pulse = 0.72 + Math.sin(Date.now() / 180) * 0.14;
-  const outerR = radius * 1.55 * pulse;
-
   context.save();
-  // Avoid canvas shadowBlur — on many GPUs it paints a large rectangular clip
-  // that looks like a box around each joint. Use soft rings instead.
+  if (typeof context.imageSmoothingEnabled === "boolean") {
+    context.imageSmoothingEnabled = true;
+  }
+  if (typeof context.imageSmoothingQuality === "string") {
+    context.imageSmoothingQuality = "high";
+  }
+
+  const r = Math.max(3, radius * 0.72);
   context.fillStyle = color;
-  context.globalAlpha = 0.12;
+  context.globalAlpha = 0.94;
   context.beginPath();
-  context.arc(point.x, point.y, outerR, 0, Math.PI * 2);
+  context.arc(point.x, point.y, r, 0, Math.PI * 2);
   context.fill();
 
-  context.globalAlpha = 0.22;
-  context.beginPath();
-  context.arc(point.x, point.y, radius * 1.12 * pulse, 0, Math.PI * 2);
-  context.fill();
-
-  context.globalAlpha = 0.92;
-  context.lineWidth = 2;
-  context.strokeStyle = "rgba(255, 247, 239, 0.95)";
-  context.beginPath();
-  context.arc(point.x, point.y, radius, 0, Math.PI * 2);
-  context.stroke();
-
-  context.fillStyle = color;
-  context.globalAlpha = 0.95;
-  context.beginPath();
-  context.arc(point.x, point.y, radius * 0.58, 0, Math.PI * 2);
-  context.fill();
-  context.restore();
-}
-
-function drawMirroredText(context, text, x, y, color) {
-  context.save();
-  context.translate(x, y);
-  context.scale(-1, 1);
-  context.font = '600 14px "IBM Plex Mono", monospace';
-  context.textAlign = "center";
-  context.textBaseline = "middle";
-  context.fillStyle = color;
-  context.fillText(text, 0, 0);
-  context.restore();
-}
-
-function drawPinchLink(context, thumbPoint, indexPoint) {
-  context.save();
-  context.strokeStyle = "rgba(255, 209, 102, 0.78)";
-  context.lineWidth = 2.5;
-  context.setLineDash([8, 6]);
-  context.beginPath();
-  context.moveTo(thumbPoint.x, thumbPoint.y);
-  context.lineTo(indexPoint.x, indexPoint.y);
+  context.strokeStyle = "rgba(255, 250, 242, 0.88)";
+  context.lineWidth = 1.15;
+  context.globalAlpha = 1;
   context.stroke();
   context.restore();
 }
@@ -137,7 +66,7 @@ export function renderHandOverlay({
   videoElement,
   overlayElement,
   landmarks,
-  handedness,
+  handedness: _handedness,
   handTrails,
 }) {
   if (!videoElement || !overlayElement) {
@@ -146,6 +75,13 @@ export function renderHandOverlay({
 
   resizeOverlayCanvas(videoElement, overlayElement);
   const context = getOverlayContext(overlayElement);
+  if (typeof context.imageSmoothingEnabled === "boolean") {
+    context.imageSmoothingEnabled = true;
+  }
+  if (typeof context.imageSmoothingQuality === "string") {
+    context.imageSmoothingQuality = "high";
+  }
+
   context.clearRect(0, 0, overlayElement.width, overlayElement.height);
 
   if (!landmarks.length) {
@@ -155,28 +91,10 @@ export function renderHandOverlay({
 
   handTrails.length = landmarks.length;
 
-  landmarks.forEach((handLandmarks, handIndex) => {
-    const thumbPoint = getCanvasPoint(overlayElement, handLandmarks[4]);
-    const indexPoint = getCanvasPoint(overlayElement, handLandmarks[8]);
-
-    updateHandTrail(handTrails, handIndex, indexPoint);
-    drawTrail(context, handTrails[handIndex] ?? [], "255, 209, 102");
-
-    TRACKED_POINTS.forEach(({ index, label: pointLabel, color, radius }) => {
+  landmarks.forEach((handLandmarks) => {
+    TRACKED_POINTS.forEach(({ index, color, radius }) => {
       const point = getCanvasPoint(overlayElement, handLandmarks[index]);
       drawTrackingPoint(context, point, color, radius);
-
-      if (index === 0 || index === 8) {
-        drawMirroredText(
-          context,
-          pointLabel,
-          point.x,
-          Math.max(18, point.y - 18),
-          "#fff7ef"
-        );
-      }
     });
-
-    drawPinchLink(context, thumbPoint, indexPoint);
   });
 }

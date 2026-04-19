@@ -8,7 +8,11 @@ import {
   sampleFrame,
 } from "../lib/motionAnalysis";
 import { extractTextFromPdf } from "../lib/pdfLoader";
-import { snapshotPieces, verifyStep } from "../lib/stepVerifier";
+import {
+  describeSnapshotForUi,
+  snapshotPieces,
+  verifyStep,
+} from "../lib/stepVerifier";
 import { formatElapsed } from "../lib/time";
 import { useSpeechGuide } from "./useSpeechGuide";
 
@@ -41,6 +45,7 @@ function createInitialUiState() {
     completionSummary: "",
     showCompletion: false,
     cameraActive: false,
+    workspaceScanSummary: "",
   };
 }
 
@@ -69,6 +74,7 @@ function createRuntimeState() {
     completedSteps: new Set(),
     currentStepIndex: 0,
     corrections: 0,
+    lastPieceScanUiAt: 0,
   };
 }
 
@@ -189,6 +195,7 @@ export function useFlowSession() {
       guidanceState: "Ready",
       completionSummary: "",
       showCompletion: false,
+      workspaceScanSummary: "",
     });
 
     syncProgressUi();
@@ -531,6 +538,21 @@ export function useFlowSession() {
       motionValue: `${score.toFixed(1)}%`,
     });
 
+    const scanNow = Date.now();
+    if (scanNow - runtime.lastPieceScanUiAt >= 850) {
+      runtime.lastPieceScanUiAt = scanNow;
+      try {
+        const snap = snapshotPieces(
+          canvasElement,
+          captureContextRef.current,
+          config
+        );
+        patchUi({ workspaceScanSummary: describeSnapshotForUi(snap) });
+      } catch {
+        /* ignore */
+      }
+    }
+
     const handPresent =
       runtime.handCount > 0 ||
       Date.now() - runtime.handLastSeenAt <= config.handMemoryMs;
@@ -635,10 +657,6 @@ export function useFlowSession() {
         handTrails: runtime.handTrails,
       });
 
-      // After drawing the hands, run a quick piece-detection pass on the
-      // captured (downsampled) frame and draw bounding boxes for detected
-      // LEGO piece candidates. This is a lightweight heuristic that groups
-      // similarly-colored regions on the small capture canvas.
       patchUi({
         handCount: landmarks.length,
       });
@@ -925,6 +943,7 @@ export function useFlowSession() {
       engineState: "Idle",
       sessionState: runtime.steps.length ? "Ready" : "Not started",
       guidanceState: "Ready",
+      workspaceScanSummary: "",
     });
 
     setStatus(

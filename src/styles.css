@@ -401,6 +401,25 @@ textarea {
   pointer-events: none;
 }
 
+.workspace-scan-caption {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 10px;
+  z-index: 3;
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 14px;
+  background: rgba(21, 33, 29, 0.58);
+  color: rgba(255, 250, 242, 0.94);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  letter-spacing: 0.02em;
+  pointer-events: none;
+  border: 1px solid rgba(255, 250, 242, 0.12);
+}
+
 .video-placeholder {
   position: absolute;
   inset: 0;
