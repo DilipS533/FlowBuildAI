@@ -85,6 +85,10 @@ function isNoiseLine(line) {
   const letters = (t.match(/[a-zA-Z]/g) || []).length;
   const digits = (t.match(/\d/g) || []).length;
 
+  if (letters === 0 && /^\d{4,8}$/.test(t)) {
+    return true;
+  }
+
   if (letters === 0 && digits >= 3 && t.length <= 48) {
     return true;
   }
