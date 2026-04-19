@@ -1,4 +1,4 @@
-# FlowStep AI
+# StepSight AI
 
 React/Vite version of the browser-only realtime task guidance app. It keeps the same product behavior:
 

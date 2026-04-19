@@ -32,7 +32,7 @@ function createInitialUiState() {
     correctionCount: 0,
     inputFeedback: {
       message:
-        "FlowStep AI accepts numbered lists, bullets, or plain sentences.",
+        "StepSight AI accepts numbered lists, bullets, or plain sentences.",
       error: false,
     },
     motionValue: "0.0%",

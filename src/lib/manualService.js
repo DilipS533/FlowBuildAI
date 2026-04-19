@@ -97,7 +97,7 @@ export function formatManualAsInstructions(manualData) {
   instructions += 'To access the full manual:\n';
   instructions += '1. Click the link or copy it to your browser\n';
   instructions += '2. Download the PDF instruction manual\n';
-  instructions += '3. Return to FlowStep AI and upload the PDF\n';
+  instructions += '3. Return to StepSight AI and upload the PDF\n';
   
   return instructions;
 }

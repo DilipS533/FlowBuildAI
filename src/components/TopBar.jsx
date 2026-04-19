@@ -2,7 +2,7 @@ export function TopBar({ demoMode, onDemoModeChange }) {
   return (
     <header className="topbar">
       <div>
-        <p className="eyebrow">FlowStep AI</p>
+        <p className="eyebrow">StepSight AI</p>
         <h1>Live task guidance with in-browser verification</h1>
       </div>
 
