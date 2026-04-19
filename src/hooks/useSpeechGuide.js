@@ -41,7 +41,11 @@ export function useSpeechGuide(onStateChange) {
 
     utterance.onend = () => {
       speakingRef.current = false;
-      onStateChange("Listening");
+      if (!queueRef.current.length) {
+        onStateChange("Ready");
+      } else {
+        onStateChange("Listening");
+      }
       pumpQueue();
     };
 

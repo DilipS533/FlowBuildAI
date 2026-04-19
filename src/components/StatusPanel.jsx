@@ -36,8 +36,8 @@ export function StatusPanel({
       <article className="card timeline-card">
         <div className="card-heading">
           <div>
-            <p className="eyebrow">Live Feed</p>
-            <h2>Event stream</h2>
+            <p className="eyebrow">Event Stream</p>
+            <h2>Session log</h2>
           </div>
         </div>
 
@@ -64,9 +64,13 @@ export function StatusPanel({
       <article className="card hint-card">
         <p className="eyebrow">Verification Model</p>
         <p className="support-text">
-          Step completion uses motion onset, hand presence, and post-action
-          stabilization. Demo Mode lowers the motion threshold and accepts
-          shorter actions.
+          Each step watches for a motion episode (frame differencing on the
+          downsampled camera feed), hand activity from MediaPipe, then compares
+          color-grouped piece regions before and after the workspace
+          stabilizes. Pick, place,
+          and attach language in the step text steers the checker; otherwise any
+          visible piece-count change can confirm progress. Demo Mode lowers
+          motion thresholds and timing so short gestures still register.
         </p>
       </article>
     </aside>

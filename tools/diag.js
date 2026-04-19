@@ -1,4 +1,13 @@
-const puppeteer = require('puppeteer');
+function loadPuppeteer() {
+  try {
+    return require("puppeteer");
+  } catch {
+    console.error(
+      "This script needs Puppeteer. Install with: npm i -D puppeteer"
+    );
+    process.exit(1);
+  }
+}
 
 const urls = [
   'http://localhost:5173/FlowBuildAI/',
@@ -6,6 +15,7 @@ const urls = [
 ];
 
 (async () => {
+  const puppeteer = loadPuppeteer();
   for (const url of urls) {
     console.log('\n=== Testing', url, '===\n');
     try {

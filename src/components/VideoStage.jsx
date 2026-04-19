@@ -52,7 +52,7 @@ export function VideoStage({
 
         <div className="stage-footer">
           <div className="metric-card">
-            <span>Motion</span>
+            <span>Motion %</span>
             <strong>{motionValue}</strong>
           </div>
           <div className="metric-card">

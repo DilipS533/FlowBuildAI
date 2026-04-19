@@ -13,6 +13,7 @@ export default function App() {
     overlayRef,
     captureCanvasRef,
     handleInstructionTextChange,
+    handleManualSearchResult,
     handleParseInstructions,
     handlePdfUpload,
     handleDemoModeChange,
@@ -37,7 +38,7 @@ export default function App() {
           onInstructionTextChange={handleInstructionTextChange}
           onParseInstructions={handleParseInstructions}
           onPdfUpload={handlePdfUpload}
-          onManualSearch={handleInstructionTextChange}
+          onManualSearch={handleManualSearchResult}
         />
 
         <VideoStage

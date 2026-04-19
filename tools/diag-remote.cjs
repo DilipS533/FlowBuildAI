@@ -1,8 +1,18 @@
-const puppeteer = require('puppeteer');
+function loadPuppeteer() {
+  try {
+    return require("puppeteer");
+  } catch {
+    console.error(
+      "This script needs Puppeteer. Install with: npm i -D puppeteer"
+    );
+    process.exit(1);
+  }
+}
 
 const url = 'https://DilipS533.github.io/FlowBuildAI/';
 
 (async () => {
+  const puppeteer = loadPuppeteer();
   console.log('\n=== Testing', url, '===\n');
   try {
     const browser = await puppeteer.launch({ args: ['--no-sandbox', '--disable-setuid-sandbox'] });

@@ -557,6 +557,12 @@ export function useFlowSession() {
     }
 
     await waitForGlobal(() => window.Hands, "Hand tracking");
+    // Optional: drawing_utils adds connector/landmark helpers used by handOverlay.
+    await waitForGlobal(
+      () => typeof window.drawConnectors === "function",
+      "MediaPipe drawing",
+      5000
+    ).catch(() => {});
 
     const handsTracker = new window.Hands({
       locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
@@ -1041,6 +1047,14 @@ export function useFlowSession() {
     });
   }
 
+  /** LEGO/IKEA search fills the textarea; optional manual metadata is ignored here. */
+  function handleManualSearchResult(instructionText) {
+    patchUi({
+      instructionText,
+    });
+    addLog("Manual search results copied into the instruction field.");
+  }
+
   function handleParseInstructions() {
     applyInstructions(ui.instructionText);
   }
@@ -1095,6 +1109,7 @@ export function useFlowSession() {
     overlayRef,
     captureCanvasRef,
     handleInstructionTextChange,
+    handleManualSearchResult,
     handleParseInstructions,
     handlePdfUpload,
     handleDemoModeChange,
